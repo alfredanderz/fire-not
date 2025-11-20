@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Test FCM Token</title>
+    <style>
+      body {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        max-width: 800px;
+        margin: 50px auto;
+        padding: 20px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        min-height: 100vh;
+      }
+      .container {
+        background: white;
+        padding: 30px;
+        border-radius: 15px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+      }
+      h1 {
+        color: #667eea;
+        text-align: center;
+        margin-bottom: 30px;
+      }
+      .section {
+        margin: 20px 0;
+        padding: 20px;
+        background: #f8f9fa;
+        border-radius: 10px;
+        border-left: 4px solid #667eea;
+      }
+      .token-box {
+        background: #e9ecef;
+        padding: 15px;
+        border-radius: 8px;
+        font-family: monospace;
+        word-break: break-all;
+        font-size: 12px;
+        margin: 10px 0;
+      }
+      button {
+        background: #667eea;
+        color: white;
+        border: none;
+        padding: 12px 24px;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 16px;
+        font-weight: bold;
+        transition: all 0.3s;
+        width: 100%;
+        margin: 10px 0;
+      }
+      button:hover {
+        background: #5568d3;
+        transform: translateY(-2px);
+        box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+      }
+      button:disabled {
+        background: #ccc;
+        cursor: not-allowed;
+        transform: none;
+      }
+      .status {
+        padding: 10px;
+        border-radius: 8px;
+        margin: 10px 0;
+        font-weight: bold;
+      }
+      .success {
+        background: #d4edda;
+        color: #155724;
+      }
+      .error {
+        background: #f8d7da;
+        color: #721c24;
+      }
+      .info {
+        background: #d1ecf1;
+        color: #0c5460;
+      }
+      input {
+        width: 100%;
+        padding: 12px;
+        border: 2px solid #ddd;
+        border-radius: 8px;
+        font-size: 14px;
+        box-sizing: border-box;
+        margin: 5px 0;
+      }
+      label {
+        font-weight: bold;
+        color: #495057;
+        display: block;
+        margin: 10px 0 5px 0;
+      }
+      .copy-btn {
+        background: #28a745;
+        width: auto;
+        padding: 8px 16px;
+        font-size: 14px;
+        margin: 10px 0 0 0;
+      }
+      .copy-btn:hover {
+        background: #218838;
+      }
+      .step {
+        background: #fff3cd;
+        padding: 15px;
+        border-radius: 8px;
+        margin: 20px 0;
+        border-left: 4px solid #ffc107;
+      }
+      .step h3 {
+        margin-top: 0;
+        color: #856404;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>Test Firebase Cloud Messaging</h1>
+
+      <!-- PASO 1: Configuración -->
+      <div class="step">
+        <h3>Paso 1: Configura tu proyecto Firebase</h3>
+        <p>Ve a tu proyecto Firebase → Project Settings → General</p>
+        <p>Copia estos valores de "Your apps" → Web app:</p>
+      </div>
+
+      <div class="section">
+        <label>API Key:</label>
+        <input type="text" id="apiKey" placeholder="AIzaSy..." />
+
+        <label>Auth Domain:</label>
+        <input
+          type="text"
+          id="authDomain"
+          placeholder="tu-proyecto.firebaseapp.com"
+        />
+
+        <label>Project ID:</label>
+        <input type="text" id="projectId" placeholder="tu-proyecto" />
+
+        <label>Storage Bucket:</label>
+        <input
+          type="text"
+          id="storageBucket"
+          placeholder="tu-proyecto.appspot.com"
+        />
+
+        <label>Messaging Sender ID:</label>
+        <input type="text" id="messagingSenderId" placeholder="123456789" />
+
+        <label>App ID:</label>
+        <input type="text" id="appId" placeholder="1:123456789:web:abc123" />
+
+        <button onclick="initFirebase()">Inicializar Firebase</button>
+      </div>
+
+      <!-- PASO 2: Obtener Token -->
+      <div class="section" id="tokenSection" style="display: none">
+        <h3>📱 Tu Token FCM:</h3>
+        <div id="tokenDisplay" class="token-box">Esperando token...</div>
+        <button class="copy-btn" onclick="copyToken()">📋 Copiar Token</button>
+        <button onclick="requestPermission()">
+          Solicitar Permiso de Notificaciones
+        </button>
+      </div>
+
+      <!-- PASO 3: Probar envío -->
+      <div class="section" id="testSection" style="display: none">
+        <h3>Probar envío desde Spring Boot:</h3>
+        <p>Usa este JSON en Postman:</p>
+        <div class="token-box" id="postmanJson">Esperando token...</div>
+        <button class="copy-btn" onclick="copyPostmanJson()">
+          📋 Copiar JSON
+        </button>
+      </div>
+
+      <div id="status"></div>
+    </div>
+
+    <script type="module">
+      import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+      import {
+        getMessaging,
+        getToken,
+        onMessage,
+      } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging.js";
+
+      let messaging;
+      let currentToken = "";
+
+      window.initFirebase = async function () {
+        const apiKey = document.getElementById("apiKey").value;
+        const authDomain = document.getElementById("authDomain").value;
+        const projectId = document.getElementById("projectId").value;
+        const storageBucket = document.getElementById("storageBucket").value;
+        const messagingSenderId =
+          document.getElementById("messagingSenderId").value;
+        const appId = document.getElementById("appId").value;
+
+        if (!apiKey || !projectId || !messagingSenderId || !appId) {
+          showStatus("Por favor completa todos los campos", "error");
+          return;
+        }
+
+        try {
+          const firebaseConfig = {
+            apiKey,
+            authDomain,
+            projectId,
+            storageBucket,
+            messagingSenderId,
+            appId,
+          };
+
+          const app = initializeApp(firebaseConfig);
+          messaging = getMessaging(app);
+
+          showStatus(" Firebase inicializado correctamente", "success");
+          document.getElementById("tokenSection").style.display = "block";
+
+          await requestPermission();
+        } catch (error) {
+          showStatus(" Error: " + error.message, "error");
+        }
+      };
+
+      window.requestPermission = async function () {
+        try {
+          const permission = await Notification.requestPermission();
+
+          if (permission === "granted") {
+            showStatus(" Permiso concedido. Obteniendo token...", "success");
+
+            const token = await getToken(messaging, {
+              vapidKey:
+                "BM8LRhMnYBDuM2TDJ2M3AhlmlCgnyNjmErgx1p93PLdzysQkFp0kCZFj_z0XwHLFyWzaojZHUOAFAZKpnKDyWtU",
+            });
+
+            if (token) {
+              currentToken = token;
+              document.getElementById("tokenDisplay").textContent = token;
+              document.getElementById("testSection").style.display = "block";
+
+              const postmanJson = JSON.stringify(
+                {
+                  token: token,
+                  title: "¡Hola desde Spring Boot!",
+                  body: "Esta notificación SÍ debería funcionar 🎉",
+                  data: {
+                    userId: "123",
+                    type: "test",
+                  },
+                },
+                null,
+                2
+              );
+
+              document.getElementById("postmanJson").textContent = postmanJson;
+              showStatus(
+                " Token obtenido correctamente. ¡Cópialo y úsalo en Postman!",
+                "success"
+              );
+            }
+          } else {
+            showStatus(
+              "Permiso denegado. Necesitas permitir notificaciones.",
+              "error"
+            );
+          }
+        } catch (error) {
+          showStatus(" Error: " + error.message, "error");
+        }
+      };
+
+      window.copyToken = function () {
+        navigator.clipboard.writeText(currentToken);
+        showStatus(" Token copiado al portapapeles", "success");
+      };
+
+      window.copyPostmanJson = function () {
+        const json = document.getElementById("postmanJson").textContent;
+        navigator.clipboard.writeText(json);
+        showStatus(" JSON copiado. Pégalo en Postman", "success");
+      };
+
+      function showStatus(message, type) {
+        const status = document.getElementById("status");
+        status.className = "status " + type;
+        status.textContent = message;
+      }
+
+      // Escuchar mensajes cuando la app está abierta
+      if (messaging) {
+        onMessage(messaging, (payload) => {
+          console.log("Mensaje recibido:", payload);
+          showStatus(
+            " ¡Notificación recibida! " + payload.notification.title,
+            "success"
+          );
+        });
+      }
+    </script>
+  </body>
+</html>
